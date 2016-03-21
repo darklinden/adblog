@@ -1,2 +1,15 @@
-#!/bin/bash -l
-python "adblog.py" "$@"
+#!/bin/bash
+packageName=$1
+echo "packageName is set to "$packageName;
+
+platformName=$2
+if [ -z "$platformName" ]; then
+    echo "platformName is unset, set to javascript";
+    $platformName = "javascript";
+else
+    echo "platformName is set to '$platformName'";
+fi
+
+adb shell am start -S $packageName'/org.cocos2dx.'$platformName'.AppActivity'
+pid=`adb shell ps | grep $packageName | awk '{print $2}'`
+adb logcat | grep --color=auto $pid
