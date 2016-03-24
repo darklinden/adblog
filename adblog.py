@@ -35,14 +35,52 @@ def self_install(file, des):
     shutil.copy(file_path, to_path)
     run_cmd(['chmod', 'a+x', to_path])
 
+def get_value_by_key(src, prefix, key):
+    src = src[len(prefix) + 1:]
+    list = src.split(" ")
+    for kvpair in list:
+        kvpair = kvpair.strip()
+        kvlist = kvpair.split("=")
+        if len(kvlist) == 2:
+            tmpkey = kvlist[0]
+            tmpkey = tmpkey.strip('\'')
+            tmpkey = tmpkey.strip()
+            if tmpkey == key:
+                tmpValue = kvlist[1]
+                tmpValue = tmpValue.strip('\'')
+                tmpValue = tmpValue.strip()
+                return tmpValue
 
-def cmd_getargs():
+    return ''
 
-    print list.count(sys.argv)
-    for single_arg in sys.argv:
-        print(single_arg)
+def get_package_and_activity(path):
+    # aapt dump badging fish-lua-debug.apk
+    # package: name='com.by.fishgame' versionCode='2000303' versionName='2.0.3.3' platformBuildVersionName='4.4.2-1456859'
+    # launchable-activity: name='org.cocos2dx.lua.AppActivity'  label='' icon=''
 
-    return 0
+    package_str = ""
+    activity_str = ""
+
+    pprefix = "package:"
+    aprefix = "launchable-activity:"
+
+    info_str = run_cmd(['aapt', 'dump', 'badging', path])
+    info_list = info_str.split("\n")
+    for pinfo in info_list:
+
+        if pinfo[:len(pprefix)] == pprefix:
+            package_str = pinfo
+
+        if pinfo[:len(aprefix)] == aprefix:
+            activity_str = pinfo
+
+        if len(package_str) > 0 and len(activity_str) > 0:
+            break
+
+    package_name = get_value_by_key(package_str, pprefix, "name")
+    activity_name = get_value_by_key(activity_str, aprefix, "name")
+
+    return package_name, activity_name
 
 def adb_get_pid(package_name):
     pid = 0
@@ -78,23 +116,26 @@ def __main__():
         self_install("adblog.py", "/usr/local/bin")
         return
 
-    # param
-    package_name = ""
-    platform_name = "lua"
-
+    path = ""
     if len(sys.argv) > 1:
-        package_name = sys.argv[1]
-
-    if len(sys.argv) > 2:
-        platform_name = sys.argv[2]
-
-    if len(package_name) == 0:
-        print("using adblog [package name] [optional platform lua(default) cpp javascript)] to log")
+        path = sys.argv[1]
+    else:
         return
 
-    activity_name = "org.cocos2dx." + platform_name + ".AppActivity"
+    if len(path) == 0:
+        print("using adblog [apk-path] to log")
+        return
 
-    print("adblog: starting activity " + activity_name + " of " + package_name + "...")
+    # param
+    package_name, activity_name = get_package_and_activity(path)
+
+    if len(package_name) > 0 and len(activity_name) > 0:
+        print("adblog: get package name " + package_name + " activity name " + activity_name)
+    else:
+        print("adblog: get package name " + package_name + " activity name " + activity_name)
+        return
+
+    print("adblog: starting process ...")
     activity = package_name + "/" + activity_name
     run_cmd(['adb', 'shell', 'am', 'start', '-S', activity])
 
