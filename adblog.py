@@ -87,25 +87,39 @@ def adb_get_pid(package_name):
     limit = 50
     while pid == 0 and limit > 0:
         limit -= 1
-        ps_list_str = run_cmd(['adb', 'shell', 'ps', '-C', package_name])
+        ps_list_str = run_cmd(['adb', 'shell', 'ps', '|grep', package_name])
         ps_list_str = ps_list_str.strip()
 
         if len(ps_list_str):
             ps_list = ps_list_str.split('\n')
-            if len(ps_list) > 1:
-                ps_str = ps_list[1]
-                ps_num_list = ps_str.split(' ')
-                for ps_num_str in ps_num_list:
-                    try:
-                        pid = int(ps_num_str)
-                    except ValueError:
-                        pid = 0
+            if len(ps_list) > 0:
+                for ps_line_str in ps_list:
+                    ps_num_list = ps_line_str.split(' ')
+                    has_package_name = False
+                    for s_str in ps_num_list:
+                        s_str = s_str.strip()
+                        s_str = s_str.strip("'")
+                        s_str = s_str.strip('"')
+                        if s_str.lower() == package_name.lower():
+                            has_package_name = True
+                            break
+
+                    if has_package_name:
+                        print(package_name)
+                        print(ps_num_list)
+
+                        for ps_num_str in ps_num_list:
+                            try:
+                                pid = int(ps_num_str)
+                            except ValueError:
+                                pid = 0
+
+                            if pid != 0:
+                                break
 
                     if pid != 0:
+                        print(ps_line_str)
                         break
-                if pid != 0:
-                    print(ps_str)
-                    break
 
     return pid
 
