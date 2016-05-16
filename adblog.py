@@ -137,11 +137,18 @@ def __main__():
         return
 
     if len(path) == 0:
-        print("using adblog [apk-path] to log")
+        print("using adblog [apk-path] [-i reinstall package first] to log")
         return
 
     # param
     package_name, activity_name = get_package_and_activity(path)
+
+    if len(sys.argv) > 2:
+        if sys.argv[2] == "-i":
+            print("uninstalling old apk ...")
+            print(run_cmd(['adb', 'uninstall', package_name]))
+            print("installing new apk ...")
+            print(run_cmd(['adb', 'install', path]))
 
     if len(package_name) > 0 and len(activity_name) > 0:
         print("adblog: get package name " + package_name + " activity name " + activity_name)
