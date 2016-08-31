@@ -138,35 +138,86 @@ def __main__():
 
     if len(path) == 0:
         print("using adblog [apk-path] [-i reinstall package first] to log")
+        print("using adblog [package.name] to log")
+        print("using adblog -r to log running activity")
         return
 
-    # param
-    package_name, activity_name = get_package_and_activity(path)
+    if path == "-r":
+        package_name = ""
+        package_line = ""
+        act_lines = run_cmd(['adb', 'shell', 'dumpsys', 'activity'])
+        act_lines = act_lines.split("\n")
+        idx = 0
+        while idx < len(act_lines):
+            l = act_lines[idx]
+            if "Running activities" in l:
+                package_line = act_lines[idx + 1]
+                break
+            idx += 1
 
-    if len(sys.argv) > 2:
-        if sys.argv[2] == "-i":
-            print("uninstalling old apk ...")
-            print(run_cmd(['adb', 'uninstall', package_name]))
-            print("installing new apk ...")
-            print(run_cmd(['adb', 'install', path]))
+        if len(package_line) > 0:
+            package_words = package_line.split(" ")
+            p_w = []
+            for w in package_words:
+                nw = w.strip()
+                if len(nw) > 0:
+                    p_w.append(nw)
+            print(p_w)
+            if len(p_w) > 4:
+                package_name = p_w[3]
 
-    if len(package_name) > 0 and len(activity_name) > 0:
-        print("adblog: get package name " + package_name + " activity name " + activity_name)
+        if len(package_name) > 0:
+            print("get running app: " + package_name)
+            pid = adb_get_pid(package_name)
+
+            if pid != 0:
+                ps_cmd = 'adb logcat | grep --color=auto ' + str(pid)
+                print(ps_cmd)
+                os.system(ps_cmd)
+            else:
+                print("adblog: get pid for " + package_name + " failed!")
+        else:
+            print("adblog: get pid for running app failed!")
+
+    elif os.path.isfile(path):
+        # param
+        package_name, activity_name = get_package_and_activity(path)
+
+        if len(sys.argv) > 2:
+            if sys.argv[2] == "-i":
+                print("uninstalling old apk ...")
+                print(run_cmd(['adb', 'uninstall', package_name]))
+                print("installing new apk ...")
+                print(run_cmd(['adb', 'install', path]))
+
+        if len(package_name) > 0 and len(activity_name) > 0:
+            print("adblog: get package name " + package_name + " activity name " + activity_name)
+        else:
+            print("adblog: get package name " + package_name + " activity name " + activity_name)
+            return
+
+        print("adblog: starting process ...")
+        activity = package_name + "/" + activity_name
+        run_cmd(['adb', 'shell', 'am', 'start', '-S', activity])
+
+        pid = adb_get_pid(package_name)
+
+        if pid != 0:
+            ps_cmd = 'adb logcat | grep --color=auto ' + str(pid)
+            print(ps_cmd)
+            os.system(ps_cmd)
+        else:
+            print("adblog: get pid for " + package_name + " failed!")
     else:
-        print("adblog: get package name " + package_name + " activity name " + activity_name)
-        return
+        package_name = path
 
-    print("adblog: starting process ...")
-    activity = package_name + "/" + activity_name
-    run_cmd(['adb', 'shell', 'am', 'start', '-S', activity])
+        pid = adb_get_pid(package_name)
 
-    pid = adb_get_pid(package_name)
-
-    if pid != 0:
-        ps_cmd = 'adb logcat | grep --color=auto ' + str(pid)
-        print(ps_cmd)
-        os.system(ps_cmd)
-    else:
-        print("adblog: get pid for " + package_name + " failed!")
+        if pid != 0:
+            ps_cmd = 'adb logcat | grep --color=auto ' + str(pid)
+            print(ps_cmd)
+            os.system(ps_cmd)
+        else:
+            print("adblog: get pid for " + package_name + " failed!")
 
 __main__()
