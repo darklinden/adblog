@@ -5,6 +5,15 @@ import os
 import sys
 import shutil
 
+MAY_SYM_PATH = [
+    "frameworks/runtime-src/proj.android/obj/local/armeabi",
+    "runtime-src/proj.android/obj/local/armeabi",
+    "proj.android/obj/local/armeabi",
+    "obj/local/armeabi",
+    "local/armeabi",
+    "armeabi",
+]
+
 def run_cmd(cmd):
     # print("run cmd: " + " ".join(cmd))
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -130,19 +139,18 @@ def __main__():
         self_install("adblog.py", "/usr/local/bin")
         return
 
-    path = ""
+    param = ""
     if len(sys.argv) > 1:
-        path = sys.argv[1]
-    else:
-        return
+        param = sys.argv[1]
 
-    if len(path) == 0:
+    if len(param) == 0:
         print("using adblog [apk-path] [-i reinstall package first] to log")
         print("using adblog [package.name] to log")
         print("using adblog -r to log running activity")
+        print("using adblog -s [symbolic path] to log ndk stack")
         return
 
-    if path == "-r":
+    if param == "-r":
         package_name = ""
         package_line = ""
         act_lines = run_cmd(['adb', 'shell', 'dumpsys', 'activity'])
@@ -178,17 +186,32 @@ def __main__():
                 print("adblog: get pid for " + package_name + " failed!")
         else:
             print("adblog: get pid for running app failed!")
-
-    elif os.path.isfile(path):
+    elif param.lower() == "-s":
+        param1 = ""
+        if len(sys.argv) > 2:
+            param1 = sys.argv[2]
+        if not param1.startswith("/"):
+            param1 = os.path.join(os.getcwd(), param1)
+        for p in MAY_SYM_PATH:
+            if os.path.isdir(os.path.join(param1, p)):
+                param1 = os.path.join(param1, p)
+                break
+        if not param1.endswith("armeabi"):
+            print("adblog: please select symbolic path first!")
+            return
+        ps_cmd = 'adb logcat | ndk-stack -sym ' + param1
+        print(ps_cmd)
+        os.system(ps_cmd)
+    elif os.path.isfile(param):
         # param
-        package_name, activity_name = get_package_and_activity(path)
+        package_name, activity_name = get_package_and_activity(param)
 
         if len(sys.argv) > 2:
             if sys.argv[2] == "-i":
                 print("uninstalling old apk ...")
                 print(run_cmd(['adb', 'uninstall', package_name]))
                 print("installing new apk ...")
-                print(run_cmd(['adb', 'install', path]))
+                print(run_cmd(['adb', 'install', param]))
 
         if len(package_name) > 0 and len(activity_name) > 0:
             print("adblog: get package name " + package_name + " activity name " + activity_name)
@@ -209,7 +232,7 @@ def __main__():
         else:
             print("adblog: get pid for " + package_name + " failed!")
     else:
-        package_name = path
+        package_name = param
 
         pid = adb_get_pid(package_name)
 
