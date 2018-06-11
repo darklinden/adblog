@@ -14,6 +14,10 @@ MAY_SYM_PATH = [
     "armeabi",
 ]
 
+G_ADB = ""
+G_AAPT = ""
+
+
 def run_cmd(cmd):
     # print("run cmd: " + " ".join(cmd))
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -21,6 +25,7 @@ def run_cmd(cmd):
     if err:
         print(err)
     return out
+
 
 def self_install(file, des):
     file_path = os.path.realpath(file)
@@ -44,6 +49,7 @@ def self_install(file, des):
     shutil.copy(file_path, to_path)
     run_cmd(['chmod', 'a+x', to_path])
 
+
 def get_value_by_key(src, prefix, key):
     src = src[len(prefix) + 1:]
     list = src.split(" ")
@@ -62,6 +68,7 @@ def get_value_by_key(src, prefix, key):
 
     return ''
 
+
 def get_package_and_activity(path):
     # aapt dump badging fish-lua-debug.apk
     # package: name='com.by.fishgame' versionCode='2000303' versionName='2.0.3.3' platformBuildVersionName='4.4.2-1456859'
@@ -73,7 +80,7 @@ def get_package_and_activity(path):
     pprefix = "package:"
     aprefix = "launchable-activity:"
 
-    info_str = run_cmd(['aapt', 'dump', 'badging', path])
+    info_str = run_cmd([G_AAPT, 'dump', 'badging', path])
     info_list = info_str.split("\n")
     for pinfo in info_list:
 
@@ -91,12 +98,13 @@ def get_package_and_activity(path):
 
     return package_name, activity_name
 
+
 def adb_get_pid(package_name):
     pid = 0
     limit = 50
     while pid == 0 and limit > 0:
         limit -= 1
-        ps_list_str = run_cmd(['adb', 'shell', 'ps', '|grep', package_name])
+        ps_list_str = run_cmd([G_ADB, 'shell', 'ps', '|grep', package_name])
         ps_list_str = ps_list_str.strip()
 
         if len(ps_list_str):
@@ -132,7 +140,36 @@ def adb_get_pid(package_name):
 
     return pid
 
+
+def init_tools():
+    global G_ADB
+    global G_AAPT
+
+    G_ADB = run_cmd(["which", "adb"])
+
+    G_ADB = G_ADB.strip()
+
+    G_AAPT = run_cmd(["which", "aapt"])
+
+    if len(G_AAPT.strip()) > 0:
+        return
+
+    platform_tools_path = os.path.dirname(G_ADB)
+    sdk_path = os.path.dirname(platform_tools_path)
+    build_tools_path = os.path.join(sdk_path, "build-tools")
+    build_tools_list = os.listdir(build_tools_path)
+    build_tools_list.sort()
+
+    last_build_tool = os.path.join(build_tools_path, build_tools_list[-1])
+
+    if os.path.isdir(last_build_tool):
+        G_AAPT = os.path.join(last_build_tool, "aapt")
+
+    os.system(G_ADB + " kill-server")
+
+
 def __main__():
+    init_tools()
 
     # self_install
     if len(sys.argv) > 1 and sys.argv[1] == 'install':
@@ -153,7 +190,7 @@ def __main__():
     if param == "-r":
         package_name = ""
         package_line = ""
-        act_lines = run_cmd(['adb', 'shell', 'dumpsys', 'activity'])
+        act_lines = run_cmd([G_ADB, 'shell', 'dumpsys', 'activity'])
         act_lines = act_lines.split("\n")
         idx = 0
         while idx < len(act_lines):
@@ -179,7 +216,7 @@ def __main__():
             pid = adb_get_pid(package_name)
 
             if pid != 0:
-                ps_cmd = 'adb logcat | grep --color=auto ' + str(pid)
+                ps_cmd = G_ADB + ' logcat | grep --color=auto ' + str(pid)
                 print(ps_cmd)
                 os.system(ps_cmd)
             else:
@@ -199,7 +236,7 @@ def __main__():
         if not param1.endswith("armeabi"):
             print("adblog: please select symbolic path first!")
             return
-        ps_cmd = 'adb logcat | ndk-stack -sym ' + param1
+        ps_cmd = G_ADB + ' logcat | ndk-stack -sym ' + param1
         print(ps_cmd)
         os.system(ps_cmd)
     elif os.path.isfile(param):
@@ -221,12 +258,12 @@ def __main__():
 
         print("adblog: starting process ...")
         activity = package_name + "/" + activity_name
-        run_cmd(['adb', 'shell', 'am', 'start', '-S', activity])
+        run_cmd([G_ADB, 'shell', 'am', 'start', '-S', activity])
 
         pid = adb_get_pid(package_name)
 
         if pid != 0:
-            ps_cmd = 'adb logcat | grep --color=auto ' + str(pid)
+            ps_cmd = G_ADB + ' logcat | grep --color=auto ' + str(pid)
             print(ps_cmd)
             os.system(ps_cmd)
         else:
@@ -237,10 +274,11 @@ def __main__():
         pid = adb_get_pid(package_name)
 
         if pid != 0:
-            ps_cmd = 'adb logcat | grep --color=auto ' + str(pid)
+            ps_cmd = G_ADB + ' logcat | grep --color=auto ' + str(pid)
             print(ps_cmd)
             os.system(ps_cmd)
         else:
             print("adblog: get pid for " + package_name + " failed!")
+
 
 __main__()
