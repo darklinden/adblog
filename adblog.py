@@ -197,19 +197,18 @@ def __main__():
             l = act_lines[idx]
             if "Running activities" in l:
                 package_line = act_lines[idx + 1]
-                break
-            idx += 1
 
-        if len(package_line) > 0:
-            package_words = package_line.split(" ")
-            p_w = []
-            for w in package_words:
-                nw = w.strip()
-                if len(nw) > 0:
-                    p_w.append(nw)
-            print(p_w)
-            if len(p_w) > 4:
-                package_name = p_w[3]
+                if len(package_line) > 0:
+                    package_words = package_line.split(" ")
+                    for w in package_words:
+                        nw = w.strip()
+                        if len(nw) > 0 and nw.startswith("A="):
+                            package_name = nw[2:]
+                # print(package_name)
+                if package_name != "com.mumu.launcher":
+                    break
+
+            idx += 1
 
         if len(package_name) > 0:
             print("get running app: " + package_name)
