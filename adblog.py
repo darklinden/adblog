@@ -4,18 +4,11 @@ import subprocess
 import os
 import sys
 import shutil
-
-MAY_SYM_PATH = [
-    "frameworks/runtime-src/proj.android/obj/local/armeabi",
-    "runtime-src/proj.android/obj/local/armeabi",
-    "proj.android/obj/local/armeabi",
-    "obj/local/armeabi",
-    "local/armeabi",
-    "armeabi",
-]
+import time
 
 G_ADB = ""
 G_AAPT = ""
+G_DEVICE = ""
 
 
 def run_cmd(cmd):
@@ -104,7 +97,7 @@ def adb_get_pid(package_name):
     limit = 50
     while pid == 0 and limit > 0:
         limit -= 1
-        ps_list_str = run_cmd([G_ADB, 'shell', 'ps', '|grep', package_name])
+        ps_list_str = run_cmd([G_ADB, "-s", G_DEVICE, 'shell', 'ps', '|grep', package_name])
         ps_list_str = ps_list_str.strip()
 
         if len(ps_list_str):
@@ -144,6 +137,7 @@ def adb_get_pid(package_name):
 def init_tools():
     global G_ADB
     global G_AAPT
+    global G_DEVICE
 
     G_ADB = run_cmd(["which", "adb"])
 
@@ -167,30 +161,80 @@ def init_tools():
 
     os.system(G_ADB + " kill-server")
 
+    devices_str = run_cmd(["adb", "devices"])
+    devices = devices_str.split('\n')
+    device_list = []
+    for d in devices:
+        if len(d.strip()) <= 0:
+            continue
+
+        dl = d.split('\t')
+        if len(dl) != 2:
+            continue
+
+        device_list.append(dl[0])
+
+    if len(device_list) == 0:
+        print("adblog error: no device found!")
+    elif len(device_list) == 1:
+        G_DEVICE = device_list[0]
+    elif len(device_list) > 1:
+        print("adblog: please select device:")
+        idx = 0
+        for d in device_list:
+            print ("\t" + str(idx) + "\t" + d)
+        idx = input("choose:")
+
+        G_DEVICE = device_list[idx]
+
+
+def print_help():
+    print("adblog "
+          "\n\t-c cmd "
+          "\n\t\t r log running activity"
+          "\n\t\t s log armeabi symbol"
+          "\n\t\t i install apk, run and log"
+          "\n\t\t l read apk package name, run and logcat"
+          "\n\t\t mem install apk if not exist, run and log memory"
+          "\n\t\t cpu install apk if not exist, run and log cpu"
+          "\n\t-f [file path] ")
+
 
 def __main__():
-    init_tools()
-
     # self_install
     if len(sys.argv) > 1 and sys.argv[1] == 'install':
         self_install("adblog.py", "/usr/local/bin")
         return
 
-    param = ""
-    if len(sys.argv) > 1:
-        param = sys.argv[1]
+    init_tools()
 
-    if len(param) == 0:
-        print("using adblog [apk-path] [-i reinstall package first] to log")
-        print("using adblog [package.name] to log")
-        print("using adblog -r to log running activity")
-        print("using adblog -s [symbolic path] to log ndk stack")
+    argLen = len(sys.argv)
+
+    cmd = ""
+    file_path = ""
+
+    idx = 1
+    while idx < argLen:
+        cmd_s = sys.argv[idx]
+        if cmd_s[0] == "-":
+            c = cmd_s[1:]
+            v = sys.argv[idx + 1]
+            if c == "c":
+                cmd = v
+            elif c == "f":
+                file_path = v
+            idx += 2
+        else:
+            idx += 1
+
+    if file_path == "" and cmd == "":
+        print_help()
         return
 
-    if param == "-r":
+    if cmd == "r":
         package_name = ""
         package_line = ""
-        act_lines = run_cmd([G_ADB, 'shell', 'dumpsys', 'activity'])
+        act_lines = run_cmd([G_ADB, "-s", G_DEVICE, 'shell', 'dumpsys', 'activity'])
         act_lines = act_lines.split("\n")
         idx = 0
         while idx < len(act_lines):
@@ -215,69 +259,137 @@ def __main__():
             pid = adb_get_pid(package_name)
 
             if pid != 0:
-                ps_cmd = G_ADB + ' logcat | grep --color=auto ' + str(pid)
+                ps_cmd = G_ADB + "-s" + G_DEVICE + ' logcat | grep --color=auto ' + str(pid)
                 print(ps_cmd)
                 os.system(ps_cmd)
             else:
                 print("adblog: get pid for " + package_name + " failed!")
         else:
             print("adblog: get pid for running app failed!")
-    elif param.lower() == "-s":
-        param1 = ""
-        if len(sys.argv) > 2:
-            param1 = sys.argv[2]
-        if not param1.startswith("/"):
-            param1 = os.path.join(os.getcwd(), param1)
-        for p in MAY_SYM_PATH:
-            if os.path.isdir(os.path.join(param1, p)):
-                param1 = os.path.join(param1, p)
-                break
-        if not param1.endswith("armeabi"):
-            print("adblog: please select symbolic path first!")
+    elif cmd == "s":
+        if not os.path.isabs(file_path):
+            file_path = os.path.join(os.getcwd(), file_path)
+
+        if not "armeabi" in os.path.basename(file_path).lower():
+            print("adblog: please select symbolic file_path first!")
             return
-        ps_cmd = G_ADB + ' logcat | ndk-stack -sym ' + param1
+        ps_cmd = G_ADB + "-s" + G_DEVICE + ' logcat | ndk-stack -sym ' + file_path
         print(ps_cmd)
         os.system(ps_cmd)
-    elif os.path.isfile(param):
+    elif cmd == "i":
         # param
-        package_name, activity_name = get_package_and_activity(param)
+        package_name, activity_name = get_package_and_activity(file_path)
 
-        if len(sys.argv) > 2:
-            if sys.argv[2] == "-i":
-                print("uninstalling old apk ...")
-                print(run_cmd(['adb', 'uninstall', package_name]))
-                print("installing new apk ...")
-                print(run_cmd(['adb', 'install', param]))
+        print("uninstalling old apk ...")
+        print(run_cmd(['adb', "-s", G_DEVICE, 'uninstall', package_name]))
+        print("installing new apk ...")
+        print(run_cmd(['adb', "-s", G_DEVICE, 'install', file_path]))
 
-        if len(package_name) > 0 and len(activity_name) > 0:
-            print("adblog: get package name " + package_name + " activity name " + activity_name)
-        else:
-            print("adblog: get package name " + package_name + " activity name " + activity_name)
+        print("adblog: get package name " + package_name + " activity name " + activity_name)
+        if len(package_name) <= 0 or len(activity_name) <= 0:
             return
 
         print("adblog: starting process ...")
         activity = package_name + "/" + activity_name
-        run_cmd([G_ADB, 'shell', 'am', 'start', '-S', activity])
+        run_cmd([G_ADB, "-s", G_DEVICE, 'shell', 'am', 'start', '-S', activity])
 
         pid = adb_get_pid(package_name)
 
         if pid != 0:
-            ps_cmd = G_ADB + ' logcat | grep --color=auto ' + str(pid)
+            ps_cmd = G_ADB + "-s" + G_DEVICE + ' logcat | grep --color=auto ' + str(pid)
             print(ps_cmd)
             os.system(ps_cmd)
+        else:
+            print("adblog: get pid for " + package_name + " failed!")
+
+    elif cmd == "l":
+        # param
+        package_name, activity_name = get_package_and_activity(file_path)
+
+        print("adblog: get package name " + package_name + " activity name " + activity_name)
+        if len(package_name) <= 0 or len(activity_name) <= 0:
+            return
+
+        print("adblog: starting process ...")
+        activity = package_name + "/" + activity_name
+        run_cmd([G_ADB, "-s", G_DEVICE, 'shell', 'am', 'start', '-S', activity])
+
+        pid = adb_get_pid(package_name)
+
+        if pid != 0:
+            ps_cmd = G_ADB + "-s" + G_DEVICE + ' logcat | grep --color=auto ' + str(pid)
+            print(ps_cmd)
+            os.system(ps_cmd)
+        else:
+            print("adblog: get pid for " + package_name + " failed!")
+
+    elif cmd == "mem":
+        # param
+        package_name, activity_name = get_package_and_activity(file_path)
+
+        print("adblog: get package name " + package_name + " activity name " + activity_name)
+        if len(package_name) <= 0 or len(activity_name) <= 0:
+            return
+
+        pls = run_cmd([G_ADB, "-s", G_DEVICE, "shell", "pm", "list", "packages"])
+        pl = pls.split('\n')
+        installed = False
+        for l in pl:
+            if l.strip().endswith(package_name):
+                installed = True
+                break
+
+        if not installed:
+            print("installing apk ...")
+            print(run_cmd([G_ADB, "-s", G_DEVICE, 'install', file_path]))
+
+        print("adblog: starting process ...")
+        activity = package_name + "/" + activity_name
+        run_cmd([G_ADB, "-s", G_DEVICE, 'shell', 'am', 'start', '-S', activity])
+
+        pid = adb_get_pid(package_name)
+
+        if pid != 0:
+            while (True):
+                print (run_cmd([G_ADB, "-s", G_DEVICE, "shell", "dumpsys", "meminfo", str(pid)]))
+                time.sleep(2)
+        else:
+            print("adblog: get pid for " + package_name + " failed!")
+
+    elif cmd == "cpu":
+        # param
+        package_name, activity_name = get_package_and_activity(file_path)
+
+        print("adblog: get package name " + package_name + " activity name " + activity_name)
+        if len(package_name) <= 0 or len(activity_name) <= 0:
+            return
+
+        pls = run_cmd([G_ADB, "-s", G_DEVICE, "shell", "pm", "list", "packages"])
+        pl = pls.split('\n')
+        installed = False
+        for l in pl:
+            if l.strip().endswith(package_name):
+                installed = True
+                break
+
+        if not installed:
+            print("installing apk ...")
+            print(run_cmd([G_ADB, "-s", G_DEVICE, 'install', file_path]))
+
+        print("adblog: starting process ...")
+        activity = package_name + "/" + activity_name
+        run_cmd([G_ADB, "-s", G_DEVICE, 'shell', 'am', 'start', '-S', activity])
+
+        pid = adb_get_pid(package_name)
+
+        if pid != 0:
+            while (True):
+                print (run_cmd([G_ADB, "-s", G_DEVICE, "shell", "dumpsys", "cpuinfo", "|", "grep", package_name]))
+                time.sleep(2)
         else:
             print("adblog: get pid for " + package_name + " failed!")
     else:
-        package_name = param
-
-        pid = adb_get_pid(package_name)
-
-        if pid != 0:
-            ps_cmd = G_ADB + ' logcat | grep --color=auto ' + str(pid)
-            print(ps_cmd)
-            os.system(ps_cmd)
-        else:
-            print("adblog: get pid for " + package_name + " failed!")
+        print_help()
 
 
 __main__()
