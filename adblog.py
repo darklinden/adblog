@@ -259,7 +259,7 @@ def __main__():
             pid = adb_get_pid(package_name)
 
             if pid != 0:
-                ps_cmd = G_ADB + "-s" + G_DEVICE + ' logcat | grep --color=auto ' + str(pid)
+                ps_cmd = G_ADB + " -s " + G_DEVICE + ' logcat | grep --color=auto ' + str(pid)
                 print(ps_cmd)
                 os.system(ps_cmd)
             else:
@@ -270,10 +270,12 @@ def __main__():
         if not os.path.isabs(file_path):
             file_path = os.path.join(os.getcwd(), file_path)
 
+        file_path = file_path.rstrip("/")
+
         if not "armeabi" in os.path.basename(file_path).lower():
             print("adblog: please select symbolic file_path first!")
             return
-        ps_cmd = G_ADB + "-s" + G_DEVICE + ' logcat | ndk-stack -sym ' + file_path
+        ps_cmd = G_ADB + " -s " + G_DEVICE + ' logcat | ndk-stack -sym ' + file_path
         print(ps_cmd)
         os.system(ps_cmd)
     elif cmd == "i":
@@ -296,7 +298,7 @@ def __main__():
         pid = adb_get_pid(package_name)
 
         if pid != 0:
-            ps_cmd = G_ADB + "-s" + G_DEVICE + ' logcat | grep --color=auto ' + str(pid)
+            ps_cmd = G_ADB + " -s " + G_DEVICE + ' logcat | grep --color=auto ' + str(pid)
             print(ps_cmd)
             os.system(ps_cmd)
         else:
@@ -317,7 +319,7 @@ def __main__():
         pid = adb_get_pid(package_name)
 
         if pid != 0:
-            ps_cmd = G_ADB + "-s" + G_DEVICE + ' logcat | grep --color=auto ' + str(pid)
+            ps_cmd = G_ADB + " -s " + G_DEVICE + ' logcat | grep --color=auto ' + str(pid)
             print(ps_cmd)
             os.system(ps_cmd)
         else:
