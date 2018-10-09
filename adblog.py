@@ -175,7 +175,8 @@ def init_tools():
         device_list.append(dl[0])
 
     if len(device_list) == 0:
-        print("adblog error: no device found!")
+        print ("adblog error: no device found!")
+        exit(0)
     elif len(device_list) == 1:
         G_DEVICE = device_list[0]
     elif len(device_list) > 1:
@@ -183,6 +184,7 @@ def init_tools():
         idx = 0
         for d in device_list:
             print ("\t" + str(idx) + "\t" + d)
+            idx = idx + 1
         idx = input("choose:")
 
         G_DEVICE = device_list[idx]
