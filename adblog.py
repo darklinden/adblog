@@ -274,7 +274,7 @@ def __main__():
 
         file_path = file_path.rstrip("/")
 
-        if not "armeabi" in os.path.basename(file_path).lower():
+        if (not "armeabi" in os.path.basename(file_path).lower()) and (not "x86" in os.path.basename(file_path).lower()):
             print("adblog: please select symbolic file_path first!")
             return
         ps_cmd = G_ADB + " -s " + G_DEVICE + ' logcat | ndk-stack -sym ' + file_path
